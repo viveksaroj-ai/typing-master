@@ -1,423 +1,263 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useContext } from "react";
+import { useNavigate } from "react-router-dom";
+import axios from "axios";
+import { AuthContext } from "@/App";
 import Navbar from "@/components/Navbar";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { toast } from "sonner";
-import { Gamepad2, Zap, Target, Heart } from "lucide-react";
+import { Progress } from "@/components/ui/progress";
+import { Zap, Target, Trophy, Flame, TrendingUp, Clock } from "lucide-react";
 
-const GamesPage = () => {
-  const [selectedGame, setSelectedGame] = useState(null);
+const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
+const API = `${BACKEND_URL}/api`;
 
-  const games = [
-    {
-      id: 'falling-words',
-      title: 'Falling Words',
-      description: 'Type words before they fall off the screen',
-      icon: Zap,
-      color: 'blue'
-    },
-    {
-      id: 'speed-challenge',
-      title: 'Speed Challenge',
-      description: 'Type as many words as possible in 60 seconds',
-      icon: Target,
-      color: 'purple'
-    },
-    {
-      id: 'survival',
-      title: 'Survival Mode',
-      description: 'Type correctly or lose a life. Last as long as you can!',
-      icon: Heart,
-      color: 'red'
+const Dashboard = () => {
+  const navigate = useNavigate();
+  const { user } = useContext(AuthContext);
+  const [stats, setStats] = useState(null);
+  const [recentTests, setRecentTests] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchDashboardData();
+  }, []);
+
+  const fetchDashboardData = async () => {
+    try {
+      const [statsRes, historyRes] = await Promise.all([
+        axios.get(`${API}/practice/stats`),
+        axios.get(`${API}/practice/history?limit=5`)
+      ]);
+      setStats(statsRes.data);
+      setRecentTests(historyRes.data);
+    } catch (error) {
+      console.error("Failed to fetch dashboard data", error);
+    } finally {
+      setLoading(false);
     }
-  ];
+  };
+
+  const getXPProgress = () => {
+    const xp = user?.xp || 0;
+    if (xp < 100) return { current: xp, target: 100, percentage: (xp / 100) * 100 };
+    if (xp < 500) return { current: xp - 100, target: 400, percentage: ((xp - 100) / 400) * 100 };
+    if (xp < 1500) return { current: xp - 500, target: 1000, percentage: ((xp - 500) / 1000) * 100 };
+    return { current: xp - 1500, target: 500, percentage: Math.min(((xp - 1500) / 500) * 100, 100) };
+  };
+
+  const xpProgress = getXPProgress();
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
+        <Navbar />
+        <div className="container mx-auto px-4 py-8 flex items-center justify-center">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-600 mx-auto"></div>
+            <p className="mt-4 text-slate-600">Loading dashboard...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
       <Navbar />
       <div className="container mx-auto px-4 py-8">
-        {!selectedGame ? (
-          <>
-            <div className="mb-8">
-              <h1 className="text-4xl font-bold mb-2" data-testid="games-title">Typing Games</h1>
-              <p className="text-slate-600">Make learning fun with engaging typing games</p>
-            </div>
+        <div className="mb-8">
+          <h1 className="text-4xl font-bold mb-2" data-testid="dashboard-title">Welcome back, {user?.username}!</h1>
+          <p className="text-slate-600">Track your progress and continue improving your typing skills.</p>
+        </div>
 
-            <div className="grid md:grid-cols-3 gap-6">
-              {games.map((game) => {
-                const Icon = game.icon;
-                return (
-                  <Card 
-                    key={game.id}
-                    data-testid={`game-card-${game.id}`}
-                    className="game-card cursor-pointer hover:shadow-xl transition-all"
-                    onClick={() => setSelectedGame(game.id)}
-                  >
-                    <CardHeader>
-                      <div className={`w-12 h-12 bg-${game.color}-100 rounded-lg flex items-center justify-center mb-4`}>
-                        <Icon className={`w-6 h-6 text-${game.color}-600`} />
-                      </div>
-                      <CardTitle>{game.title}</CardTitle>
-                      <CardDescription>{game.description}</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      <Button 
-                        data-testid={`play-${game.id}-btn`}
-                        className="w-full" 
-                        variant="outline"
-                      >
-                        Play Game
-                      </Button>
-                    </CardContent>
-                  </Card>
-                );
-              })}
-            </div>
-          </>
-        ) : (
-          <GameComponent gameId={selectedGame} onBack={() => setSelectedGame(null)} />
+        {/* User Progress */}
+        <div className="grid md:grid-cols-3 gap-6 mb-8">
+          <Card data-testid="level-card" className="stat-card border-blue-200">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Target className="w-5 h-5 text-blue-600" />
+                Level
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-bold gradient-text mb-2 capitalize">
+                {user?.level}
+              </div>
+              <div className="mb-2">
+                <Progress value={xpProgress.percentage} className="h-2" />
+              </div>
+              <p className="text-sm text-slate-600">
+                {xpProgress.current} / {xpProgress.target} XP to next level
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card data-testid="streak-card" className="stat-card border-orange-200">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Flame className="w-5 h-5 text-orange-600" />
+                Streak
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-bold text-orange-600 mb-2">
+                {user?.streak_days || 0} days
+              </div>
+              <p className="text-sm text-slate-600">
+                Keep practicing daily to maintain your streak!
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card data-testid="xp-card" className="stat-card border-purple-200">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Zap className="w-5 h-5 text-purple-600" />
+                Total XP
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-bold text-purple-600 mb-2">
+                {user?.xp || 0}
+              </div>
+              <p className="text-sm text-slate-600">
+                Earn XP by completing tests and practice sessions
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Statistics */}
+        <div className="grid md:grid-cols-4 gap-6 mb-8">
+          <Card data-testid="total-tests-card" className="stat-card">
+            <CardHeader>
+              <CardTitle className="text-sm font-medium text-slate-600">Total Tests</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{stats?.total_tests || 0}</div>
+            </CardContent>
+          </Card>
+
+          <Card data-testid="avg-wpm-card" className="stat-card">
+            <CardHeader>
+              <CardTitle className="text-sm font-medium text-slate-600">Average WPM</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-blue-600">{stats?.average_wpm || 0}</div>
+            </CardContent>
+          </Card>
+
+          <Card data-testid="avg-accuracy-card" className="stat-card">
+            <CardHeader>
+              <CardTitle className="text-sm font-medium text-slate-600">Accuracy</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-green-600">{stats?.average_accuracy || 0}%</div>
+            </CardContent>
+          </Card>
+
+          <Card data-testid="best-wpm-card" className="stat-card">
+            <CardHeader>
+              <CardTitle className="text-sm font-medium text-slate-600">Best WPM</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-purple-600">{stats?.best_wpm || 0}</div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Quick Actions */}
+        <div className="grid md:grid-cols-3 gap-6 mb-8">
+          <Card 
+            data-testid="practice-card"
+            className="stat-card cursor-pointer hover:shadow-lg transition-shadow" 
+            onClick={() => navigate('/practice')}
+          >
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Target className="w-5 h-5 text-blue-600" />
+                Practice Mode
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-slate-600 mb-4">Improve your typing with various practice modes</p>
+              <Button data-testid="start-practice-btn" className="w-full bg-blue-600 hover:bg-blue-700">
+                Start Practice
+              </Button>
+            </CardContent>
+          </Card>
+
+          <Card 
+            data-testid="games-card"
+            className="stat-card cursor-pointer hover:shadow-lg transition-shadow" 
+            onClick={() => navigate('/games')}
+          >
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Zap className="w-5 h-5 text-purple-600" />
+                Typing Games
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-slate-600 mb-4">Fun games to make typing practice engaging</p>
+              <Button data-testid="play-games-btn" className="w-full bg-purple-600 hover:bg-purple-700">
+                Play Games
+              </Button>
+            </CardContent>
+          </Card>
+
+          <Card 
+            data-testid="tests-card"
+            className="stat-card cursor-pointer hover:shadow-lg transition-shadow" 
+            onClick={() => navigate('/tests')}
+          >
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Trophy className="w-5 h-5 text-green-600" />
+                SSC CGL Tests
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-slate-600 mb-4">Take official SSC CGL typing mock tests</p>
+              <Button data-testid="take-test-btn" className="w-full bg-green-600 hover:bg-green-700">
+                Take Test
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Recent Activity */}
+        {recentTests.length > 0 && (
+          <Card data-testid="recent-activity-card">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Clock className="w-5 h-5" />
+                Recent Activity
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                {recentTests.map((test, index) => (
+                  <div key={test.id || index} className="flex items-center justify-between p-4 bg-slate-50 rounded-lg">
+                    <div>
+                      <p className="font-medium capitalize">{test.mode} Practice</p>
+                      <p className="text-sm text-slate-600">
+                        {new Date(test.created_at).toLocaleDateString()}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="font-semibold text-blue-600">{test.wpm} WPM</p>
+                      <p className="text-sm text-slate-600">{test.accuracy}% accuracy</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
         )}
       </div>
     </div>
   );
 };
 
-const GameComponent = ({ gameId, onBack }) => {
-  if (gameId === 'falling-words') {
-    return <FallingWordsGame onBack={onBack} />;
-  } else if (gameId === 'speed-challenge') {
-    return <SpeedChallengeGame onBack={onBack} />;
-  } else if (gameId === 'survival') {
-    return <SurvivalGame onBack={onBack} />;
-  }
-  return null;
-};
-
-const FallingWordsGame = ({ onBack }) => {
-  const [words, setWords] = useState([]);
-  const [input, setInput] = useState("");
-  const [score, setScore] = useState(0);
-  const [gameOver, setGameOver] = useState(false);
-  const [started, setStarted] = useState(false);
-  const gameRef = useRef(null);
-
-  const wordList = ['hello', 'world', 'type', 'fast', 'game', 'code', 'speed', 'quick', 'jump', 'play'];
-
-  useEffect(() => {
-    if (started && !gameOver) {
-      const interval = setInterval(() => {
-        addWord();
-      }, 2000);
-
-      const fallInterval = setInterval(() => {
-        setWords(prev => {
-          const updated = prev.map(w => ({ ...w, y: w.y + 10 }));
-          const lost = updated.filter(w => w.y > 550);
-          if (lost.length > 0) {
-            setGameOver(true);
-          }
-          return updated.filter(w => w.y <= 600);
-        });
-      }, 100);
-
-      return () => {
-        clearInterval(interval);
-        clearInterval(fallInterval);
-      };
-    }
-  }, [started, gameOver]);
-
-  const addWord = () => {
-    const word = wordList[Math.floor(Math.random() * wordList.length)];
-    const x = Math.random() * 700;
-    setWords(prev => [...prev, { word, x, y: 0, id: Date.now() }]);
-  };
-
-  const handleInput = (e) => {
-    const value = e.target.value;
-    setInput(value);
-
-    const matched = words.find(w => w.word === value);
-    if (matched) {
-      setWords(prev => prev.filter(w => w.id !== matched.id));
-      setScore(prev => prev + 10);
-      setInput("");
-      toast.success(`+10 points!`);
-    }
-  };
-
-  const startGame = () => {
-    setStarted(true);
-    setGameOver(false);
-    setScore(0);
-    setWords([]);
-    setInput("");
-  };
-
-  return (
-    <div>
-      <div className="mb-6 flex items-center justify-between">
-        <h2 className="text-3xl font-bold">Falling Words</h2>
-        <Button onClick={onBack} variant="outline" data-testid="back-to-games-btn">Back to Games</Button>
-      </div>
-
-      <Card data-testid="falling-words-game-card">
-        <CardHeader>
-          <div className="flex justify-between items-center">
-            <CardTitle>Score: {score}</CardTitle>
-            {!started && (
-              <Button onClick={startGame} className="bg-blue-600 hover:bg-blue-700" data-testid="start-falling-words-btn">
-                Start Game
-              </Button>
-            )}
-          </div>
-        </CardHeader>
-        <CardContent>
-          <div 
-            ref={gameRef}
-            className="relative bg-slate-100 rounded-lg overflow-hidden mb-4"
-            style={{ height: '600px', border: '2px solid #cbd5e1' }}
-          >
-            {words.map(w => (
-              <div
-                key={w.id}
-                className="absolute font-bold text-xl text-blue-600 word-fall"
-                style={{ left: `${w.x}px`, top: `${w.y}px` }}
-              >
-                {w.word}
-              </div>
-            ))}
-            {gameOver && (
-              <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center">
-                <div className="bg-white p-8 rounded-lg text-center">
-                  <h3 className="text-2xl font-bold mb-4">Game Over!</h3>
-                  <p className="text-xl mb-4">Final Score: {score}</p>
-                  <Button onClick={startGame} className="bg-blue-600 hover:bg-blue-700" data-testid="restart-falling-words-btn">
-                    Play Again
-                  </Button>
-                </div>
-              </div>
-            )}
-          </div>
-          <Input
-            data-testid="falling-words-input"
-            value={input}
-            onChange={handleInput}
-            placeholder="Type the falling words..."
-            className="text-lg font-mono"
-            disabled={!started || gameOver}
-            onPaste={(e) => e.preventDefault()}
-          />
-        </CardContent>
-      </Card>
-    </div>
-  );
-};
-
-const SpeedChallengeGame = ({ onBack }) => {
-  const [currentWord, setCurrentWord] = useState('');
-  const [input, setInput] = useState('');
-  const [score, setScore] = useState(0);
-  const [timeLeft, setTimeLeft] = useState(60);
-  const [started, setStarted] = useState(false);
-  const [gameOver, setGameOver] = useState(false);
-
-  const wordList = ['hello', 'world', 'type', 'fast', 'game', 'code', 'speed', 'quick', 'jump', 'play', 'test', 'word', 'time', 'score', 'win'];
-
-  useEffect(() => {
-    if (started && timeLeft > 0) {
-      const timer = setInterval(() => {
-        setTimeLeft(prev => {
-          if (prev <= 1) {
-            setGameOver(true);
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
-      return () => clearInterval(timer);
-    }
-  }, [started, timeLeft]);
-
-  const getRandomWord = () => {
-    return wordList[Math.floor(Math.random() * wordList.length)];
-  };
-
-  const startGame = () => {
-    setStarted(true);
-    setGameOver(false);
-    setScore(0);
-    setTimeLeft(60);
-    setInput('');
-    setCurrentWord(getRandomWord());
-  };
-
-  const handleInput = (e) => {
-    const value = e.target.value;
-    setInput(value);
-
-    if (value === currentWord) {
-      setScore(prev => prev + 1);
-      setInput('');
-      setCurrentWord(getRandomWord());
-      toast.success('+1 word!');
-    }
-  };
-
-  return (
-    <div>
-      <div className="mb-6 flex items-center justify-between">
-        <h2 className="text-3xl font-bold">Speed Challenge</h2>
-        <Button onClick={onBack} variant="outline" data-testid="back-to-games-btn">Back to Games</Button>
-      </div>
-
-      <Card data-testid="speed-challenge-game-card">
-        <CardHeader>
-          <div className="flex justify-between items-center">
-            <CardTitle>Score: {score} words</CardTitle>
-            <div className="text-2xl font-bold text-blue-600">Time: {timeLeft}s</div>
-          </div>
-        </CardHeader>
-        <CardContent>
-          {!started ? (
-            <div className="text-center py-20">
-              <p className="text-lg text-slate-600 mb-6">Type as many words as possible in 60 seconds!</p>
-              <Button onClick={startGame} size="lg" className="bg-purple-600 hover:bg-purple-700" data-testid="start-speed-challenge-btn">
-                Start Challenge
-              </Button>
-            </div>
-          ) : gameOver ? (
-            <div className="text-center py-20">
-              <h3 className="text-3xl font-bold mb-4">Time's Up!</h3>
-              <p className="text-2xl mb-6">You typed <span className="text-purple-600 font-bold">{score}</span> words</p>
-              <Button onClick={startGame} size="lg" className="bg-purple-600 hover:bg-purple-700" data-testid="restart-speed-challenge-btn">
-                Play Again
-              </Button>
-            </div>
-          ) : (
-            <div>
-              <div className="text-center py-12 mb-6 bg-slate-50 rounded-lg">
-                <p className="text-5xl font-bold text-purple-600">{currentWord}</p>
-              </div>
-              <Input
-                data-testid="speed-challenge-input"
-                value={input}
-                onChange={handleInput}
-                placeholder="Type the word above..."
-                className="text-xl font-mono text-center"
-                autoFocus
-                onPaste={(e) => e.preventDefault()}
-              />
-            </div>
-          )}
-        </CardContent>
-      </Card>
-    </div>
-  );
-};
-
-const SurvivalGame = ({ onBack }) => {
-  const [currentWord, setCurrentWord] = useState('');
-  const [input, setInput] = useState('');
-  const [score, setScore] = useState(0);
-  const [lives, setLives] = useState(3);
-  const [started, setStarted] = useState(false);
-  const [gameOver, setGameOver] = useState(false);
-
-  const wordList = ['hello', 'world', 'type', 'survive', 'game', 'careful', 'speed', 'accuracy', 'focus', 'challenge'];
-
-  const getRandomWord = () => {
-    return wordList[Math.floor(Math.random() * wordList.length)];
-  };
-
-  const startGame = () => {
-    setStarted(true);
-    setGameOver(false);
-    setScore(0);
-    setLives(3);
-    setInput('');
-    setCurrentWord(getRandomWord());
-  };
-
-  const handleInput = (e) => {
-    const value = e.target.value;
-    setInput(value);
-
-    if (value === currentWord) {
-      setScore(prev => prev + 1);
-      setInput('');
-      setCurrentWord(getRandomWord());
-      toast.success('+1 point!');
-    } else if (value.length >= currentWord.length) {
-      const newLives = lives - 1;
-      setLives(newLives);
-      setInput('');
-      setCurrentWord(getRandomWord());
-      toast.error('-1 life!');
-      if (newLives <= 0) {
-        setGameOver(true);
-      }
-    }
-  };
-
-  return (
-    <div>
-      <div className="mb-6 flex items-center justify-between">
-        <h2 className="text-3xl font-bold">Survival Mode</h2>
-        <Button onClick={onBack} variant="outline" data-testid="back-to-games-btn">Back to Games</Button>
-      </div>
-
-      <Card data-testid="survival-game-card">
-        <CardHeader>
-          <div className="flex justify-between items-center">
-            <CardTitle>Score: {score}</CardTitle>
-            <div className="flex gap-2">
-              {[...Array(3)].map((_, i) => (
-                <Heart
-                  key={i}
-                  className={`w-6 h-6 ${i < lives ? 'fill-red-500 text-red-500' : 'text-slate-300'}`}
-                />
-              ))}
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent>
-          {!started ? (
-            <div className="text-center py-20">
-              <p className="text-lg text-slate-600 mb-6">Type words correctly or lose a life. You have 3 lives!</p>
-              <Button onClick={startGame} size="lg" className="bg-red-600 hover:bg-red-700" data-testid="start-survival-btn">
-                Start Survival
-              </Button>
-            </div>
-          ) : gameOver ? (
-            <div className="text-center py-20">
-              <h3 className="text-3xl font-bold mb-4">Game Over!</h3>
-              <p className="text-2xl mb-6">Final Score: <span className="text-red-600 font-bold">{score}</span></p>
-              <Button onClick={startGame} size="lg" className="bg-red-600 hover:bg-red-700" data-testid="restart-survival-btn">
-                Play Again
-              </Button>
-            </div>
-          ) : (
-            <div>
-              <div className="text-center py-12 mb-6 bg-slate-50 rounded-lg">
-                <p className="text-5xl font-bold text-red-600">{currentWord}</p>
-              </div>
-              <Input
-                data-testid="survival-input"
-                value={input}
-                onChange={handleInput}
-                placeholder="Type the word carefully..."
-                className="text-xl font-mono text-center"
-                autoFocus
-                onPaste={(e) => e.preventDefault()}
-              />
-            </div>
-          )}
-        </CardContent>
-      </Card>
-    </div>
-  );
-};
-
-export default GamesPage;
+export default Dashboard;
