@@ -5,3 +5,4 @@ motor
 pyjwt
 bcrypt
 starlette
+email-validator
